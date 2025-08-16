@@ -20,9 +20,9 @@ namespace Visor
 		void open();
 		void close();
 		void pollEvents();
+		bool shouldClose();
 #if defined(VSR_GRAPHICS_API_VULKAN)
 		VkSurfaceKHR createVkSurface(VkInstance instance, VkAllocationCallbacks* pAllocator);
-
 		std::vector<const c8*> getRequiredVkInstanceExtensions();
 #endif
 

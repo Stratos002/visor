@@ -10,14 +10,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # sources
 file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
 
-add_library(
+# replace by add_library with "STATIC" later
+add_executable(
 	${PROJECT_NAME} 
-	STATIC
 	${SOURCES})
 
 target_include_directories(
 	${PROJECT_NAME} 
 	PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 	${CMAKE_CURRENT_SOURCE_DIR}/external/volk
 	${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/include
@@ -37,7 +38,7 @@ else()
 endif()
 
 # graphics API
-target_compile_definitions(${PROJECT_NAME} PRIVATE VSR_GRAPHICS_API_VULKAN)
+target_compile_definitions(${PROJECT_NAME} PRIVATE VSR_GRAPHICS_API_VULKAN VK_NO_PROTOTYPES)
 
 add_subdirectory(external/glfw)
 

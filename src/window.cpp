@@ -47,6 +47,11 @@ namespace Visor
 		glfwPollEvents();
 	}
 
+	bool Window::shouldClose()
+	{
+		return glfwWindowShouldClose((GLFWwindow*)_pNativeHandle);
+	}
+
 #if defined(VSR_GRAPHICS_API_VULKAN)
 	VkSurfaceKHR Window::createVkSurface(VkInstance instance, VkAllocationCallbacks* pAllocator)
 	{
