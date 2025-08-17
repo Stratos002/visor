@@ -11,9 +11,9 @@ namespace Visor
 	class Renderer
 	{
 	public:
-		void render(const Camera& camera, const std::vector<Entity>& entities);
+		void render(const Camera& camera);
 
-		static void start(Window& window);
+		static void start(Window& window, const std::vector<Entity>& entities);
 		static void terminate();
 		static Renderer& getInstance();
 	};

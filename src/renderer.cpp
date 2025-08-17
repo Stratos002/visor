@@ -10,20 +10,20 @@ namespace Visor
 {
 	static Renderer* pInstance = nullptr;
 
-	void Renderer::render(const Camera& camera, const std::vector<Entity>& entities)
+	void Renderer::render(const Camera& camera)
 	{
 		assert(pInstance != nullptr);
 		#if defined(VSR_GRAPHICS_API_VULKAN)
-			RendererBackendVk::getInstance().render(camera, entities);
+			RendererBackendVk::getInstance().render(camera);
 		#endif
 	}
 
-	void Renderer::start(Window& window)
+	void Renderer::start(Window& window, const std::vector<Entity>& entities)
 	{
 		assert(pInstance == nullptr);
 		pInstance = new Renderer();
 		#if defined(VSR_GRAPHICS_API_VULKAN)
-			RendererBackendVk::start(window);
+			RendererBackendVk::start(window, entities);
 		#endif
 	}
 

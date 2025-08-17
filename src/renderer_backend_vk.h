@@ -4,6 +4,7 @@
 #include "window.h"
 #include "camera.h"
 #include "entity.h"
+#include "maths.h"
 
 #include "volk.h"
 
@@ -15,14 +16,38 @@ namespace Visor
 	class RendererBackendVk
 	{
 	public:
-		void render(const Camera& camera, const std::vector<Entity>& entities);
+		void render(const Camera& camera);
 
-		static void start(Window& window);
+		static void start(Window& window, const std::vector<Entity>& entities);
 		static void terminate();
 		static RendererBackendVk& getInstance();
 
 	private:
-		RendererBackendVk(Window& window);
+		struct EntityDrawInfo
+		{
+			VkDescriptorSetLayout entityDescriptorSetLayout;
+			VkDescriptorSet entityDescriptorSet;
+			VkPipelineLayout graphicsPipelineLayout;
+			VkPipeline graphicsPipeline;
+			ui32 vertexCount;
+			VkBuffer vertexBuffer;
+			VkDeviceMemory vertexBufferMemory;
+			VkBuffer uniformBuffer;
+			VkDeviceMemory uniformBufferMemory;
+		};
+
+		struct GlobalUniformBuffer
+		{
+			Matrix4<f32> viewProjectionMatrix;
+		};
+
+		struct EntityUniformBuffer
+		{
+			Matrix4<f32> transformationMatrix;
+		};
+
+	private:
+		RendererBackendVk(Window& window, const std::vector<Entity>& entities);
 		~RendererBackendVk();
 
 		VkInstance createInstance(
@@ -33,7 +58,6 @@ namespace Visor
 		VkPhysicalDevice pickPhysicalDevice(VkInstance instance);
 		ui32 findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
 		VkDevice createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator);
-		VkSurfaceKHR createSurface(Window& window, VkInstance instance, VkAllocationCallbacks* pAllocator);
 		VkSwapchainKHR createSwapchain(
 			VkPhysicalDevice physicalDevice,
 			VkFormat format,
@@ -83,8 +107,7 @@ namespace Visor
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
 		VkPipelineLayout createPipelineLayout(
-			ui32 descriptorSetLayoutCount,
-			const VkDescriptorSetLayout* pDescriptorSetLayouts,
+			const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 			ui32 pushConstantRangeCount,
 			const VkPushConstantRange* pPushConstantRanges,
 			VkDevice device,
@@ -103,30 +126,18 @@ namespace Visor
 			VkShaderModule vertexShaderModule,
 			VkShaderModule fragmentShaderModule,
 			VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo,
+			VkFormat colorAttachmentFormat,
+			VkFormat depthAttachmentFormat,
 			ui32 viewportWidth,
 			ui32 viewportHeight,
 			bool enableDepthWrite,
 			VkPipelineLayout pipelineLayout,
-			VkRenderPass renderPass,
-			ui32 subpassIndex,
-			VkDevice device,
-			const VkAllocationCallbacks* pAllocator);
-		VkRenderPass createRenderPass(
-			VkFormat colorAttachmentFormat,
-			VkFormat depthAttachmentFormat,
-			VkAttachmentLoadOp depthAttachmentLoadOp,
-			VkAttachmentStoreOp depthAttachmentStoreOp,
-			VkDevice device,
-			const VkAllocationCallbacks* pAllocator);
-		VkFramebuffer createFramebuffer(
-			VkRenderPass renderPass,
-			const std::vector<VkImageView>& imageViews,
-			ui32 width,
-			ui32 height,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
 		VkFence createFence(VkDevice device, const VkAllocationCallbacks* pAllocator);
 		VkSemaphore createSemaphore(VkDevice device, const VkAllocationCallbacks* pAllocator);
+
+		void readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode);
 
 	private:
 		VkAllocationCallbacks* _pAllocator;
@@ -147,5 +158,15 @@ namespace Visor
 		VkCommandPool _commandPool;
 		VkDescriptorPool _descriptorPool;
 		VkCommandBuffer _commandBuffer;
+
+		// draw specific objects
+		VkImage _depthImage;
+		VkImageView _depthImageView;
+		VkDeviceMemory _depthImageMemory;
+		VkDescriptorSet _globalDescriptorSet;
+		VkDescriptorSetLayout _globalDescriptorSetLayout;
+		VkBuffer _globalUniformBuffer;
+		VkDeviceMemory _globalUniformBufferMemory;
+		std::vector<EntityDrawInfo> _entityDrawInfos;
 	};
 }

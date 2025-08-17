@@ -5,17 +5,29 @@
 
 #include <iostream>
 #include <cassert>
+#include <cmath>
 
 namespace Visor
 {
 	static RendererBackendVk* pInstance = nullptr;
 
-	void RendererBackendVk::render(const Camera& camera, const std::vector<Entity>& entities)
+	void RendererBackendVk::render(const Camera& camera)
 	{
 		assert(pInstance != nullptr);
 
 		vkWaitForFences(_device, 1, &_commandBufferExecutedFence, VK_FALSE, UINT64_MAX);
 		vkResetFences(_device, 1, &_commandBufferExecutedFence);
+
+		// ==== update global uniform buffer ====
+		GlobalUniformBuffer globalUniformBuffer = {};
+
+		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, 1.0) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
+		globalUniformBuffer.viewProjectionMatrix.transpose();
+
+		void* pGlobalUniformBufferData = nullptr;
+		vkMapMemory(_device, _globalUniformBufferMemory, 0, sizeof(GlobalUniformBuffer), 0, &pGlobalUniformBufferData);
+		std::memcpy(pGlobalUniformBufferData, &globalUniformBuffer, sizeof(GlobalUniformBuffer));
+		vkUnmapMemory(_device, _globalUniformBufferMemory);
 
 		ui32 availableSwapchainImageIndex = 0;
 		if (vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailableSemaphore, VK_NULL_HANDLE, &availableSwapchainImageIndex) != VK_SUCCESS)
@@ -34,9 +46,9 @@ namespace Visor
 		vkBeginCommandBuffer(_commandBuffer, &commandBufferBeginInfo);
 
 		VkClearValue clearColor = {};
-		clearColor.color.float32[0] = 1.0f;
-		clearColor.color.float32[1] = 0.0f;
-		clearColor.color.float32[2] = 0.0f;
+		clearColor.color.float32[0] = 0.2f;
+		clearColor.color.float32[1] = 0.5f;
+		clearColor.color.float32[2] = 0.8f;
 		clearColor.color.float32[3] = 1.0f;
 
 		VkRenderingAttachmentInfo colorAttachment = {};
@@ -65,7 +77,19 @@ namespace Visor
 
 		vkCmdBeginRendering(_commandBuffer, &renderingInfo);
 
-		// draw calls
+		for (const EntityDrawInfo& entityDrawInfo : _entityDrawInfos)
+		{
+			VkDescriptorSet descriptorSets[] = {
+				_globalDescriptorSet,
+				entityDrawInfo.entityDescriptorSet
+			};
+
+			vkCmdBindDescriptorSets(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, entityDrawInfo.graphicsPipelineLayout, 0, 2, descriptorSets, 0, nullptr);
+			vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, entityDrawInfo.graphicsPipeline);
+			VkDeviceSize offset = 0;
+			vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &entityDrawInfo.vertexBuffer, &offset);
+			vkCmdDraw(_commandBuffer, entityDrawInfo.vertexCount, 1, 0, 0);
+		}
 
 		vkCmdEndRendering(_commandBuffer);
 
@@ -102,10 +126,10 @@ namespace Visor
 		vkQueuePresentKHR(_queue, &presentInfo);
 	}
 
-	void RendererBackendVk::start(Window& window)
+	void RendererBackendVk::start(Window& window, const std::vector<Entity>& entities)
 	{
 		assert(pInstance == nullptr);
-		pInstance = new RendererBackendVk(window);
+		pInstance = new RendererBackendVk(window, entities);
 	}
 
 	void RendererBackendVk::terminate()
@@ -121,7 +145,7 @@ namespace Visor
 		return *pInstance;
 	}
 
-	RendererBackendVk::RendererBackendVk(Window& window)
+	RendererBackendVk::RendererBackendVk(Window& window, const std::vector<Entity>& entities)
 		: _pAllocator(nullptr)
 	{
 		if (volkInitialize() != VK_SUCCESS)
@@ -163,6 +187,165 @@ namespace Visor
 		}
 		_commandBufferExecutedFence = createFence(_device, _pAllocator);
 		_commandBuffer = allocateCommandBuffer(_commandPool, _device);
+
+		// ===== frame specific stuff =====
+
+		std::vector<VkDescriptorSetLayoutBinding> globalDescriptorSetLayoutBindings;
+
+		VkDescriptorSetLayoutBinding globalDescriptorSetLayoutBinding = {};
+		globalDescriptorSetLayoutBinding.binding = 0;
+		globalDescriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		globalDescriptorSetLayoutBinding.descriptorCount = 1;
+		globalDescriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+		globalDescriptorSetLayoutBindings.push_back(globalDescriptorSetLayoutBinding);
+
+		_globalDescriptorSetLayout = createDescriptorSetLayout(globalDescriptorSetLayoutBindings, _device, _pAllocator);
+		_globalDescriptorSet = allocateDescriptorSet(_descriptorPool, _globalDescriptorSetLayout, _device);
+
+		_globalUniformBuffer = createBuffer(sizeof(GlobalUniformBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
+		_globalUniformBufferMemory = allocateDeviceMemoryForBuffer(_device, _globalUniformBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
+		vkBindBufferMemory(_device, _globalUniformBuffer, _globalUniformBufferMemory, 0);
+
+		VkDescriptorBufferInfo globalUniformBufferInfo = {};
+		globalUniformBufferInfo.buffer = _globalUniformBuffer;
+		globalUniformBufferInfo.offset = 0;
+		globalUniformBufferInfo.range = VK_WHOLE_SIZE;
+
+		VkWriteDescriptorSet globalUniformBufferDescriptorWrite = {};
+		globalUniformBufferDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		globalUniformBufferDescriptorWrite.pNext = nullptr;
+		globalUniformBufferDescriptorWrite.dstSet = _globalDescriptorSet;
+		globalUniformBufferDescriptorWrite.dstBinding = 0;
+		globalUniformBufferDescriptorWrite.dstArrayElement = 0;
+		globalUniformBufferDescriptorWrite.descriptorCount = 1;
+		globalUniformBufferDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		globalUniformBufferDescriptorWrite.pImageInfo = nullptr;
+		globalUniformBufferDescriptorWrite.pBufferInfo = &globalUniformBufferInfo;
+
+		vkUpdateDescriptorSets(_device, 1, &globalUniformBufferDescriptorWrite, 0, nullptr);
+
+		for (const Entity& entity : entities)
+		{
+			EntityDrawInfo entityDrawInfo = {};
+			
+			std::vector<VkDescriptorSetLayoutBinding> entityDescriptorSetLayoutBindings;
+
+			VkDescriptorSetLayoutBinding entityUniformBufferDescriptorSetLayoutBinding = {};
+			entityUniformBufferDescriptorSetLayoutBinding.binding = 0;
+			entityUniformBufferDescriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			entityUniformBufferDescriptorSetLayoutBinding.descriptorCount = 1;
+			entityUniformBufferDescriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+			entityDescriptorSetLayoutBindings.push_back(entityUniformBufferDescriptorSetLayoutBinding);
+
+			entityDrawInfo.entityDescriptorSetLayout = createDescriptorSetLayout(entityDescriptorSetLayoutBindings, _device, _pAllocator);
+			entityDrawInfo.entityDescriptorSet = allocateDescriptorSet(_descriptorPool, entityDrawInfo.entityDescriptorSetLayout, _device);
+
+			std::vector<VkDescriptorSetLayout> descriptorSetLayouts = {
+				_globalDescriptorSetLayout,
+				entityDrawInfo.entityDescriptorSetLayout
+			};
+
+			entityDrawInfo.graphicsPipelineLayout = createPipelineLayout(descriptorSetLayouts, 0, nullptr, _device, _pAllocator);
+
+			VkShaderModule vertexShaderModule;
+			{
+				ui32 codeSize = 0;
+				ui32* pCode = nullptr;
+				readShader(entity.getMesh().getVertexShaderName(), &codeSize, &pCode);
+				vertexShaderModule = createShaderModule(codeSize, pCode, _device, _pAllocator);
+			}
+
+			VkShaderModule fragmentShaderModule;
+			{
+				ui32 codeSize = 0;
+				ui32* pCode = nullptr;
+				readShader(entity.getMesh().getFragmentShaderName(), &codeSize, &pCode);
+				fragmentShaderModule = createShaderModule(codeSize, pCode, _device, _pAllocator);
+			}
+
+			VkVertexInputBindingDescription vertexBindingDescription = {};
+			vertexBindingDescription.binding = 0;
+			vertexBindingDescription.stride = sizeof(Mesh::Vertex);
+			vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			VkVertexInputAttributeDescription vertexAttributeDescription = {};
+			vertexAttributeDescription.binding = 0;
+			vertexAttributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
+			vertexAttributeDescription.location = 0;
+			vertexAttributeDescription.offset = 0;
+
+			VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
+			vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			vertexInputStateCreateInfo.pNext = nullptr;
+			vertexInputStateCreateInfo.flags = 0;
+			vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
+			vertexInputStateCreateInfo.pVertexBindingDescriptions = &vertexBindingDescription;
+			vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1;
+			vertexInputStateCreateInfo.pVertexAttributeDescriptions = &vertexAttributeDescription;
+
+			entityDrawInfo.graphicsPipeline = createGraphicsPipeline(
+				vertexShaderModule, 
+				fragmentShaderModule, 
+				vertexInputStateCreateInfo, 
+				_swapchainFormat, 
+				VK_FORMAT_D32_SFLOAT, 
+				window.getWidth(), 
+				window.getHeight(), 
+				0, 
+				entityDrawInfo.graphicsPipelineLayout, 
+				_device, 
+				_pAllocator);
+
+			entityDrawInfo.vertexCount = entity.getMesh().getVertices().size();
+			entityDrawInfo.vertexBuffer = createBuffer(sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
+			entityDrawInfo.vertexBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.vertexBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
+			vkBindBufferMemory(_device, entityDrawInfo.vertexBuffer, entityDrawInfo.vertexBufferMemory, 0);
+
+			void* pVertexData = nullptr;
+			vkMapMemory(_device, entityDrawInfo.vertexBufferMemory, 0, sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount, 0, &pVertexData);
+			std::memcpy(pVertexData, entity.getMesh().getVertices().data(), sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount);
+			vkUnmapMemory(_device, entityDrawInfo.vertexBufferMemory);
+
+			entityDrawInfo.uniformBuffer = createBuffer(sizeof(EntityUniformBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
+			entityDrawInfo.uniformBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.uniformBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
+			vkBindBufferMemory(_device, entityDrawInfo.uniformBuffer, entityDrawInfo.uniformBufferMemory, 0);
+			
+			VkDescriptorBufferInfo entityUniformBufferInfo = {};
+			entityUniformBufferInfo.buffer = entityDrawInfo.uniformBuffer;
+			entityUniformBufferInfo.offset = 0;
+			entityUniformBufferInfo.range = VK_WHOLE_SIZE;
+
+
+			VkWriteDescriptorSet entityUniformBufferDescriptorWrite = {};
+			entityUniformBufferDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			entityUniformBufferDescriptorWrite.pNext = nullptr;
+			entityUniformBufferDescriptorWrite.dstSet = entityDrawInfo.entityDescriptorSet;
+			entityUniformBufferDescriptorWrite.dstBinding = 0;
+			entityUniformBufferDescriptorWrite.dstArrayElement = 0;
+			entityUniformBufferDescriptorWrite.descriptorCount = 1;
+			entityUniformBufferDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			entityUniformBufferDescriptorWrite.pImageInfo = nullptr;
+			entityUniformBufferDescriptorWrite.pBufferInfo = &entityUniformBufferInfo;
+
+			vkUpdateDescriptorSets(_device, 1, &entityUniformBufferDescriptorWrite, 0, nullptr);
+
+			EntityUniformBuffer entityUniformBuffer = {};
+			entityUniformBuffer.transformationMatrix = 
+				Matrix4<f32>::getTranslation(entity.position) * 
+				Matrix4<f32>::getRotation(entity.yaw, entity.pitch, entity.roll) * 
+				Matrix4<f32>::getScaling(entity.scaleX, entity.scaleY, entity.scaleZ);
+
+			entityUniformBuffer.transformationMatrix.transpose();
+
+			void* pEntityUniformData = nullptr;
+			vkMapMemory(_device, entityDrawInfo.uniformBufferMemory, 0, sizeof(EntityUniformBuffer), 0, &pEntityUniformData);
+			std::memcpy(pEntityUniformData, &entityUniformBuffer, sizeof(EntityUniformBuffer));
+			vkUnmapMemory(_device, entityDrawInfo.uniformBufferMemory);
+
+			_entityDrawInfos.push_back(entityDrawInfo);
+		}
 	}
 
 	RendererBackendVk::~RendererBackendVk()
@@ -300,9 +483,14 @@ namespace Visor
 		deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
 		deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
 
+		VkPhysicalDeviceDynamicRenderingFeatures deviceDynamicRenderingFeatures = {};
+		deviceDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+		deviceDynamicRenderingFeatures.pNext = nullptr;
+		deviceDynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+
 		VkDeviceCreateInfo deviceCreateInfo = {};
 		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		deviceCreateInfo.pNext = nullptr;
+		deviceCreateInfo.pNext = &deviceDynamicRenderingFeatures;
 		deviceCreateInfo.queueCreateInfoCount = 1;
 		deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
 		deviceCreateInfo.enabledLayerCount = 0;
@@ -684,8 +872,7 @@ namespace Visor
 	}
 
 	VkPipelineLayout RendererBackendVk::createPipelineLayout(
-		ui32 descriptorSetLayoutCount,
-		const VkDescriptorSetLayout* pDescriptorSetLayouts,
+		const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 		ui32 pushConstantRangeCount,
 		const VkPushConstantRange* pPushConstantRanges,
 		VkDevice device,
@@ -695,8 +882,8 @@ namespace Visor
 		pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCreateInfo.pNext = nullptr;
 		pipelineLayoutCreateInfo.flags = 0;
-		pipelineLayoutCreateInfo.setLayoutCount = descriptorSetLayoutCount;
-		pipelineLayoutCreateInfo.pSetLayouts = pDescriptorSetLayouts;
+		pipelineLayoutCreateInfo.setLayoutCount = (ui32)descriptorSetLayouts.size();
+		pipelineLayoutCreateInfo.pSetLayouts = descriptorSetLayouts.data();
 		pipelineLayoutCreateInfo.pushConstantRangeCount = pushConstantRangeCount;
 		pipelineLayoutCreateInfo.pPushConstantRanges = pPushConstantRanges;
 
@@ -770,12 +957,12 @@ namespace Visor
 		VkShaderModule vertexShaderModule,
 		VkShaderModule fragmentShaderModule,
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo,
+		VkFormat colorAttachmentFormat,
+		VkFormat depthAttachmentFormat,
 		ui32 viewportWidth,
 		ui32 viewportHeight,
 		bool enableDepthWrite,
 		VkPipelineLayout pipelineLayout,
-		VkRenderPass renderPass,
-		ui32 subpassIndex,
 		VkDevice device,
 		const VkAllocationCallbacks* pAllocator)
 	{
@@ -921,9 +1108,29 @@ namespace Visor
 
 		*/
 
+
+		/*
+		    VkStructureType    sType;
+    const void*        pNext;
+    uint32_t           viewMask;
+    uint32_t           colorAttachmentCount;
+    const VkFormat*    pColorAttachmentFormats;
+    VkFormat           depthAttachmentFormat;
+    VkFormat           stencilAttachmentFormat;
+		
+		*/
+		VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo = {};
+		pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+		pipelineRenderingCreateInfo.pNext = nullptr;
+		pipelineRenderingCreateInfo.viewMask = 0;
+		pipelineRenderingCreateInfo.colorAttachmentCount = 1;
+		pipelineRenderingCreateInfo.pColorAttachmentFormats = &colorAttachmentFormat;
+		pipelineRenderingCreateInfo.depthAttachmentFormat = depthAttachmentFormat;
+		pipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
 		VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {};
 		graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		graphicsPipelineCreateInfo.pNext = nullptr;
+		graphicsPipelineCreateInfo.pNext = &pipelineRenderingCreateInfo;
 		graphicsPipelineCreateInfo.flags = 0;
 		graphicsPipelineCreateInfo.stageCount = sizeof(shaderStageCreateInfos) / sizeof(shaderStageCreateInfos[0]);
 		graphicsPipelineCreateInfo.pStages = shaderStageCreateInfos;
@@ -937,8 +1144,8 @@ namespace Visor
 		graphicsPipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 		graphicsPipelineCreateInfo.pDynamicState = nullptr;
 		graphicsPipelineCreateInfo.layout = pipelineLayout;
-		graphicsPipelineCreateInfo.renderPass = renderPass;
-		graphicsPipelineCreateInfo.subpass = subpassIndex;
+		graphicsPipelineCreateInfo.renderPass = VK_NULL_HANDLE;
+		graphicsPipelineCreateInfo.subpass = 0;
 		graphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		graphicsPipelineCreateInfo.basePipelineIndex = 0;
 
@@ -984,5 +1191,25 @@ namespace Visor
 		}
 
 		return semaphore;
+	}
+
+	void RendererBackendVk::readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode)
+	{
+		FILE* pFile = fopen(shaderPath.c_str(), "rb");
+		if (pFile == NULL)
+		{
+			std::cerr << "could not open shader source " << shaderPath << "\n";
+			std::exit(EXIT_FAILURE);
+		}
+
+		fseek(pFile, 0, SEEK_END);
+		*pSize = ftell(pFile);
+		rewind(pFile);
+
+		*ppCode = new uint32_t[*pSize];
+
+		fread(*ppCode, 1, *pSize, pFile);
+
+		fclose(pFile);
 	}
 }

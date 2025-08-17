@@ -2,8 +2,11 @@
 
 namespace Visor
 {
-	Entity::Entity(const Vector3<f32>& position, f32 yaw, f32 pitch, f32 roll, const Mesh& mesh)
+	Entity::Entity(const Vector3<f32>& position, f32 scaleX, f32 scaleY, f32 scaleZ, f32 yaw, f32 pitch, f32 roll, const Mesh& mesh)
 		: position(position)
+		, scaleX(scaleX)
+		, scaleY(scaleY)
+		, scaleZ(scaleZ)
 		, yaw(yaw)
 		, pitch(pitch)
 		, roll(roll)
