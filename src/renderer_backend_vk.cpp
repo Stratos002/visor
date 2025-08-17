@@ -33,20 +33,41 @@ namespace Visor
 		commandBufferBeginInfo.pInheritanceInfo = nullptr;
 		vkBeginCommandBuffer(_commandBuffer, &commandBufferBeginInfo);
 
-		VkClearColorValue clearColor = {};
-		clearColor.float32[0] = 1.0f;
-		clearColor.float32[1] = 0.0f;
-		clearColor.float32[2] = 0.0f;
-		clearColor.float32[3] = 1.0f;
+		VkClearValue clearColor = {};
+		clearColor.color.float32[0] = 1.0f;
+		clearColor.color.float32[1] = 0.0f;
+		clearColor.color.float32[2] = 0.0f;
+		clearColor.color.float32[3] = 1.0f;
 
-		VkImageSubresourceRange imageSubresourceRange = {};
-		imageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		imageSubresourceRange.baseMipLevel = 0;
-		imageSubresourceRange.levelCount = 1;
-		imageSubresourceRange.baseArrayLayer = 0;
-		imageSubresourceRange.layerCount = 1;
+		VkRenderingAttachmentInfo colorAttachment = {};
+		colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		colorAttachment.pNext = nullptr;
+		colorAttachment.imageView = _swapchainImageViews[availableSwapchainImageIndex];
+		colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+		colorAttachment.resolveImageView = VK_NULL_HANDLE;
+		colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachment.clearValue = clearColor;
 
-		vkCmdClearColorImage(_commandBuffer, _swapchainImages[availableSwapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageSubresourceRange);
+		VkRenderingInfo renderingInfo = {};
+		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.pNext = nullptr;
+		renderingInfo.flags = 0;
+		renderingInfo.renderArea = _renderArea;
+		renderingInfo.layerCount = 1;
+		renderingInfo.viewMask = 0;
+		renderingInfo.colorAttachmentCount = 1;
+		renderingInfo.pColorAttachments = &colorAttachment;
+		renderingInfo.pDepthAttachment = nullptr;
+		renderingInfo.pStencilAttachment = nullptr;
+
+		vkCmdBeginRendering(_commandBuffer, &renderingInfo);
+
+		// draw calls
+
+		vkCmdEndRendering(_commandBuffer);
 
 		vkEndCommandBuffer(_commandBuffer);
 
@@ -117,6 +138,10 @@ namespace Visor
 		_device = createDevice(_queueFamilyIndex, _physicalDevice, _pAllocator);
 		vkGetDeviceQueue(_device, _queueFamilyIndex, 0, &_queue);
 		{
+			_renderArea.offset.x = 0;
+			_renderArea.offset.y = 0;
+			_renderArea.extent.width = window.getWidth();
+			_renderArea.extent.height = window.getHeight();
 			_swapchainFormat = VK_FORMAT_R8G8B8A8_UNORM;
 			_swapchain = createSwapchain(_physicalDevice, _swapchainFormat, window.getWidth(), window.getHeight(), _device, _surface, _queueFamilyIndex, _pAllocator);
 			ui32 swapchainImageCount = 0;
@@ -168,7 +193,7 @@ namespace Visor
 	{
 		VkApplicationInfo applicationInfo = {};
 		applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		applicationInfo.pNext = NULL;
+		applicationInfo.pNext = nullptr;
 		applicationInfo.pApplicationName = applicationName.data();
 		applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		applicationInfo.pEngineName = engineName.data();
@@ -179,7 +204,7 @@ namespace Visor
 
 		VkInstanceCreateInfo instanceCreateInfo = {};
 		instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		instanceCreateInfo.pNext = NULL;
+		instanceCreateInfo.pNext = nullptr;
 		instanceCreateInfo.flags = 0;
 		instanceCreateInfo.pApplicationInfo = &applicationInfo;
 		instanceCreateInfo.enabledLayerCount = (ui32)layerNames.size();
@@ -200,7 +225,7 @@ namespace Visor
 	VkPhysicalDevice RendererBackendVk::pickPhysicalDevice(VkInstance instance)
 	{
 		ui32 physicalDeviceCount = 0;
-		vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, NULL);
+		vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
 
 		if (physicalDeviceCount == 0)
 		{
@@ -231,7 +256,7 @@ namespace Visor
 	ui32 RendererBackendVk::findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
 	{
 		ui32 queueFamilyCount = 0;
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
 		std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
@@ -258,10 +283,10 @@ namespace Visor
 
 	VkDevice RendererBackendVk::createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator)
 	{
-		float queuePriority = 1.0f;
+		f32 queuePriority = 1.0f;
 		VkDeviceQueueCreateInfo queueCreateInfo = {};
 		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfo.pNext = NULL;
+		queueCreateInfo.pNext = nullptr;
 		queueCreateInfo.flags = 0;
 		queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
 		queueCreateInfo.queueCount = 1;
@@ -277,11 +302,11 @@ namespace Visor
 
 		VkDeviceCreateInfo deviceCreateInfo = {};
 		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		deviceCreateInfo.pNext = NULL;
+		deviceCreateInfo.pNext = nullptr;
 		deviceCreateInfo.queueCreateInfoCount = 1;
 		deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
 		deviceCreateInfo.enabledLayerCount = 0;
-		deviceCreateInfo.ppEnabledLayerNames = NULL;
+		deviceCreateInfo.ppEnabledLayerNames = nullptr;
 		deviceCreateInfo.enabledExtensionCount = 1;
 		deviceCreateInfo.ppEnabledExtensionNames = extensionNames.data();
 		deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
@@ -316,7 +341,7 @@ namespace Visor
 
 		// ===== present modes =====
 		ui32 availablePresentModeCount = 0;
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &availablePresentModeCount, NULL);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &availablePresentModeCount, nullptr);
 		std::vector<VkPresentModeKHR> availablePresentModes(availablePresentModeCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &availablePresentModeCount, availablePresentModes.data());
 
@@ -346,7 +371,7 @@ namespace Visor
 
 		VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
 		swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		swapchainCreateInfo.pNext = NULL;
+		swapchainCreateInfo.pNext = nullptr;
 		swapchainCreateInfo.flags = 0;
 		swapchainCreateInfo.surface = surface;
 		swapchainCreateInfo.minImageCount = minImageCount; // TODO: query this!
@@ -395,7 +420,7 @@ namespace Visor
 
 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
 		descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorPoolCreateInfo.pNext = NULL;
+		descriptorPoolCreateInfo.pNext = nullptr;
 		descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 		descriptorPoolCreateInfo.maxSets = 10000; // TODO harcodded crap
 		descriptorPoolCreateInfo.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]);
@@ -415,7 +440,7 @@ namespace Visor
 	{
 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
 		descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		descriptorSetAllocateInfo.pNext = NULL;
+		descriptorSetAllocateInfo.pNext = nullptr;
 		descriptorSetAllocateInfo.descriptorPool = descriptorPool;
 		descriptorSetAllocateInfo.descriptorSetCount = 1;
 		descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
@@ -434,7 +459,7 @@ namespace Visor
 	{
 		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
 		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		commandPoolCreateInfo.pNext = NULL;
+		commandPoolCreateInfo.pNext = nullptr;
 		commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
 
@@ -452,7 +477,7 @@ namespace Visor
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
 		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		commandBufferAllocateInfo.pNext = NULL;
+		commandBufferAllocateInfo.pNext = nullptr;
 		commandBufferAllocateInfo.commandPool = commandPool;
 		commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		commandBufferAllocateInfo.commandBufferCount = 1;
@@ -471,7 +496,7 @@ namespace Visor
 	{
 		VkBufferCreateInfo bufferCreateInfo = {};
 		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferCreateInfo.pNext = NULL;
+		bufferCreateInfo.pNext = nullptr;
 		bufferCreateInfo.flags = 0;
 		bufferCreateInfo.size = size;
 		bufferCreateInfo.usage = usage;
@@ -500,7 +525,7 @@ namespace Visor
 	{
 		VkImageCreateInfo imageCreateInfo = {};
 		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageCreateInfo.pNext = NULL;
+		imageCreateInfo.pNext = nullptr;
 		imageCreateInfo.flags = 0;
 		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
 		imageCreateInfo.format = format;
@@ -536,7 +561,7 @@ namespace Visor
 	{
 		VkImageViewCreateInfo imageViewCreateInfo = {};
 		imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		imageViewCreateInfo.pNext = NULL;
+		imageViewCreateInfo.pNext = nullptr;
 		imageViewCreateInfo.flags = 0;
 		imageViewCreateInfo.image = image;
 		imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -596,7 +621,7 @@ namespace Visor
 
 		VkMemoryAllocateInfo memoryAllocateInfo = {};
 		memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memoryAllocateInfo.pNext = NULL;
+		memoryAllocateInfo.pNext = nullptr;
 		memoryAllocateInfo.allocationSize = memoryRequirements.size;
 		memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memoryRequirements.memoryTypeBits, memoryPropertyFlags);
 
@@ -622,7 +647,7 @@ namespace Visor
 
 		VkMemoryAllocateInfo memoryAllocateInfo = {};
 		memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memoryAllocateInfo.pNext = NULL;
+		memoryAllocateInfo.pNext = nullptr;
 		memoryAllocateInfo.allocationSize = memoryRequirements.size;
 		memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memoryRequirements.memoryTypeBits, memoryPropertyFlags);
 
@@ -643,7 +668,7 @@ namespace Visor
 	{
 		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
 		descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		descriptorSetLayoutCreateInfo.pNext = NULL;
+		descriptorSetLayoutCreateInfo.pNext = nullptr;
 		descriptorSetLayoutCreateInfo.flags = 0;
 		descriptorSetLayoutCreateInfo.bindingCount = (ui32)bindings.size();
 		descriptorSetLayoutCreateInfo.pBindings = bindings.data();
@@ -668,7 +693,7 @@ namespace Visor
 	{
 		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
 		pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCreateInfo.pNext = NULL;
+		pipelineLayoutCreateInfo.pNext = nullptr;
 		pipelineLayoutCreateInfo.flags = 0;
 		pipelineLayoutCreateInfo.setLayoutCount = descriptorSetLayoutCount;
 		pipelineLayoutCreateInfo.pSetLayouts = pDescriptorSetLayouts;
@@ -693,7 +718,7 @@ namespace Visor
 	{
 		VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
 		shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		shaderModuleCreateInfo.pNext = NULL;
+		shaderModuleCreateInfo.pNext = nullptr;
 		shaderModuleCreateInfo.flags = 0;
 		shaderModuleCreateInfo.codeSize = size;
 		shaderModuleCreateInfo.pCode = pCode;
@@ -720,11 +745,11 @@ namespace Visor
 		shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		shaderStageCreateInfo.module = shaderModule;
 		shaderStageCreateInfo.pName = "main";
-		shaderStageCreateInfo.pSpecializationInfo = NULL;
+		shaderStageCreateInfo.pSpecializationInfo = nullptr;
 
 		VkComputePipelineCreateInfo computePipelineCreateInfo = {};
 		computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		computePipelineCreateInfo.pNext = NULL;
+		computePipelineCreateInfo.pNext = nullptr;
 		computePipelineCreateInfo.flags = 0;
 		computePipelineCreateInfo.stage = shaderStageCreateInfo;
 		computePipelineCreateInfo.layout = pipelineLayout;
@@ -756,21 +781,21 @@ namespace Visor
 	{
 		VkPipelineShaderStageCreateInfo vertexShaderStageCreateInfo = {};
 		vertexShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vertexShaderStageCreateInfo.pNext = NULL;
+		vertexShaderStageCreateInfo.pNext = nullptr;
 		vertexShaderStageCreateInfo.flags = 0;
 		vertexShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 		vertexShaderStageCreateInfo.module = vertexShaderModule;
 		vertexShaderStageCreateInfo.pName = "main";
-		vertexShaderStageCreateInfo.pSpecializationInfo = NULL;
+		vertexShaderStageCreateInfo.pSpecializationInfo = nullptr;
 
 		VkPipelineShaderStageCreateInfo fragmentShaderStageCreateInfo = {};
 		fragmentShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fragmentShaderStageCreateInfo.pNext = NULL;
+		fragmentShaderStageCreateInfo.pNext = nullptr;
 		fragmentShaderStageCreateInfo.flags = 0;
 		fragmentShaderStageCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		fragmentShaderStageCreateInfo.module = fragmentShaderModule;
 		fragmentShaderStageCreateInfo.pName = "main";
-		fragmentShaderStageCreateInfo.pSpecializationInfo = NULL;
+		fragmentShaderStageCreateInfo.pSpecializationInfo = nullptr;
 
 		VkPipelineShaderStageCreateInfo shaderStageCreateInfos[] = {
 			vertexShaderStageCreateInfo,
@@ -779,7 +804,7 @@ namespace Visor
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
 		inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssemblyStateCreateInfo.pNext = NULL;
+		inputAssemblyStateCreateInfo.pNext = nullptr;
 		inputAssemblyStateCreateInfo.flags = 0;
 		inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
@@ -787,8 +812,8 @@ namespace Visor
 		VkViewport viewport = {};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = (float)viewportWidth;
-		viewport.height = (float)viewportHeight;
+		viewport.width = (f32)viewportWidth;
+		viewport.height = (f32)viewportHeight;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 
@@ -800,7 +825,7 @@ namespace Visor
 
 		VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
 		viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportStateCreateInfo.pNext = NULL;
+		viewportStateCreateInfo.pNext = nullptr;
 		viewportStateCreateInfo.flags = 0;
 		viewportStateCreateInfo.viewportCount = 1;
 		viewportStateCreateInfo.pViewports = &viewport;
@@ -809,7 +834,7 @@ namespace Visor
 
 		VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = {};
 		rasterizationStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizationStateCreateInfo.pNext = NULL;
+		rasterizationStateCreateInfo.pNext = nullptr;
 		rasterizationStateCreateInfo.flags = 0;
 		rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
 		rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
@@ -824,18 +849,18 @@ namespace Visor
 
 		VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo = {};
 		multisampleStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampleStateCreateInfo.pNext = NULL;
+		multisampleStateCreateInfo.pNext = nullptr;
 		multisampleStateCreateInfo.flags = 0;
 		multisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
 		multisampleStateCreateInfo.minSampleShading = 0.0f;
-		multisampleStateCreateInfo.pSampleMask = NULL;
+		multisampleStateCreateInfo.pSampleMask = nullptr;
 		multisampleStateCreateInfo.alphaToCoverageEnable = VK_FALSE;
 		multisampleStateCreateInfo.alphaToOneEnable = VK_FALSE;
 
 		VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo = {};
 		depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencilStateCreateInfo.pNext = NULL;
+		depthStencilStateCreateInfo.pNext = nullptr;
 		depthStencilStateCreateInfo.depthTestEnable = VK_TRUE;
 		depthStencilStateCreateInfo.depthWriteEnable = (VkBool32)enableDepthWrite;
 		depthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
@@ -860,7 +885,7 @@ namespace Visor
 
 		VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo = {};
 		colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlendStateCreateInfo.pNext = NULL;
+		colorBlendStateCreateInfo.pNext = nullptr;
 		colorBlendStateCreateInfo.flags = 0;
 		colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
 		colorBlendStateCreateInfo.logicOp = VK_LOGIC_OP_COPY;
@@ -898,19 +923,19 @@ namespace Visor
 
 		VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {};
 		graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		graphicsPipelineCreateInfo.pNext = NULL;
+		graphicsPipelineCreateInfo.pNext = nullptr;
 		graphicsPipelineCreateInfo.flags = 0;
 		graphicsPipelineCreateInfo.stageCount = sizeof(shaderStageCreateInfos) / sizeof(shaderStageCreateInfos[0]);
 		graphicsPipelineCreateInfo.pStages = shaderStageCreateInfos;
 		graphicsPipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
 		graphicsPipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
-		graphicsPipelineCreateInfo.pTessellationState = NULL;
+		graphicsPipelineCreateInfo.pTessellationState = nullptr;
 		graphicsPipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
 		graphicsPipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
 		graphicsPipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
 		graphicsPipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
 		graphicsPipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
-		graphicsPipelineCreateInfo.pDynamicState = NULL;
+		graphicsPipelineCreateInfo.pDynamicState = nullptr;
 		graphicsPipelineCreateInfo.layout = pipelineLayout;
 		graphicsPipelineCreateInfo.renderPass = renderPass;
 		graphicsPipelineCreateInfo.subpass = subpassIndex;
@@ -931,7 +956,7 @@ namespace Visor
 	{
 		VkFenceCreateInfo fenceCreateInfo = {};
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenceCreateInfo.pNext = NULL;
+		fenceCreateInfo.pNext = nullptr;
 		fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
 		VkFence fence;
@@ -948,7 +973,7 @@ namespace Visor
 	{
 		VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 		semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		semaphoreCreateInfo.pNext = NULL;
+		semaphoreCreateInfo.pNext = nullptr;
 		semaphoreCreateInfo.flags = 0;
 
 		VkSemaphore semaphore;

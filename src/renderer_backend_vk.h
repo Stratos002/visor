@@ -136,6 +136,7 @@ namespace Visor
 		ui32 _queueFamilyIndex;
 		VkDevice _device;
 		VkQueue _queue;
+		VkRect2D _renderArea;
 		VkSwapchainKHR _swapchain;
 		VkFormat _swapchainFormat;
 		std::vector<VkImage> _swapchainImages;
