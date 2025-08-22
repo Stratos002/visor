@@ -21,7 +21,6 @@ target_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 	${CMAKE_CURRENT_SOURCE_DIR}/external/volk
-	${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/include
 	${CMAKE_CURRENT_SOURCE_DIR}/external/Vulkan-Headers/include)
 
 # platform detection
@@ -41,6 +40,7 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE VSR_GRAPHICS_API_VULKAN VK_NO_PROTOTYPES)
 
 add_subdirectory(external/glfw)
+add_subdirectory(external/trivex)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw trivex)
 

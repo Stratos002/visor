@@ -29,9 +29,11 @@ namespace Visor
 			VkDescriptorSet entityDescriptorSet;
 			VkPipelineLayout graphicsPipelineLayout;
 			VkPipeline graphicsPipeline;
-			ui32 vertexCount;
 			VkBuffer vertexBuffer;
 			VkDeviceMemory vertexBufferMemory;
+			ui32 indexCount;
+			VkBuffer indexBuffer;
+			VkDeviceMemory indexBufferMemory;
 			VkBuffer uniformBuffer;
 			VkDeviceMemory uniformBufferMemory;
 		};

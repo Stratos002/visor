@@ -3,6 +3,7 @@
 #define VOLK_IMPLEMENTATION
 #include "volk.h"
 
+#include <cstring>
 #include <iostream>
 #include <cassert>
 #include <cmath>
@@ -88,7 +89,8 @@ namespace Visor
 			vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, entityDrawInfo.graphicsPipeline);
 			VkDeviceSize offset = 0;
 			vkCmdBindVertexBuffers(_commandBuffer, 0, 1, &entityDrawInfo.vertexBuffer, &offset);
-			vkCmdDraw(_commandBuffer, entityDrawInfo.vertexCount, 1, 0, 0);
+			vkCmdBindIndexBuffer(_commandBuffer, entityDrawInfo.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(_commandBuffer, entityDrawInfo.indexCount, 1, 0, 0, 0);
 		}
 
 		vkCmdEndRendering(_commandBuffer);
@@ -298,15 +300,24 @@ namespace Visor
 				_device, 
 				_pAllocator);
 
-			entityDrawInfo.vertexCount = entity.getMesh().getVertices().size();
-			entityDrawInfo.vertexBuffer = createBuffer(sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
+			entityDrawInfo.vertexBuffer = createBuffer(sizeof(Mesh::Vertex) * entity.getMesh().getVertices().size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
 			entityDrawInfo.vertexBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.vertexBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
 			vkBindBufferMemory(_device, entityDrawInfo.vertexBuffer, entityDrawInfo.vertexBufferMemory, 0);
 
 			void* pVertexData = nullptr;
-			vkMapMemory(_device, entityDrawInfo.vertexBufferMemory, 0, sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount, 0, &pVertexData);
-			std::memcpy(pVertexData, entity.getMesh().getVertices().data(), sizeof(Mesh::Vertex) * entityDrawInfo.vertexCount);
+			vkMapMemory(_device, entityDrawInfo.vertexBufferMemory, 0, sizeof(Mesh::Vertex) * entity.getMesh().getVertices().size(), 0, &pVertexData);
+			std::memcpy(pVertexData, entity.getMesh().getVertices().data(), sizeof(Mesh::Vertex) * entity.getMesh().getVertices().size());
 			vkUnmapMemory(_device, entityDrawInfo.vertexBufferMemory);
+			
+			entityDrawInfo.indexCount = entity.getMesh().getIndices().size();
+			entityDrawInfo.indexBuffer = createBuffer(sizeof(ui32) * entityDrawInfo.indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
+			entityDrawInfo.indexBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.indexBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
+			vkBindBufferMemory(_device, entityDrawInfo.indexBuffer, entityDrawInfo.indexBufferMemory, 0);
+
+			void* pIndexData = nullptr;
+			vkMapMemory(_device, entityDrawInfo.indexBufferMemory, 0, sizeof(ui32) * entityDrawInfo.indexCount, 0, &pIndexData);
+			std::memcpy(pIndexData, entity.getMesh().getIndices().data(), sizeof(ui32) * entityDrawInfo.indexCount);
+			vkUnmapMemory(_device, entityDrawInfo.indexBufferMemory);
 
 			entityDrawInfo.uniformBuffer = createBuffer(sizeof(EntityUniformBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
 			entityDrawInfo.uniformBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.uniformBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
