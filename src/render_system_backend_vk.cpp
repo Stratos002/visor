@@ -65,6 +65,22 @@ namespace Visor
 		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		colorAttachment.clearValue = clearColor;
 
+		VkClearValue clearDepth = {};
+		clearDepth.depthStencil.depth = 1.0f;
+		clearDepth.depthStencil.stencil = 0.0f;
+
+		VkRenderingAttachmentInfo depthAttachment = {};
+		depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		depthAttachment.pNext = nullptr;
+		depthAttachment.imageView = _depthImageView;
+		depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+		depthAttachment.resolveImageView = VK_NULL_HANDLE;
+		depthAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		depthAttachment.clearValue = clearDepth;
+
 		VkRenderingInfo renderingInfo = {};
 		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 		renderingInfo.pNext = nullptr;
@@ -74,7 +90,7 @@ namespace Visor
 		renderingInfo.viewMask = 0;
 		renderingInfo.colorAttachmentCount = 1;
 		renderingInfo.pColorAttachments = &colorAttachment;
-		renderingInfo.pDepthAttachment = nullptr;
+		renderingInfo.pDepthAttachment = &depthAttachment;
 		renderingInfo.pStencilAttachment = nullptr;
 
 		vkCmdBeginRendering(_commandBuffer, &renderingInfo);
@@ -181,6 +197,12 @@ namespace Visor
 				_swapchainImageViews.push_back(createImageView(swapchainImage, _swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT, _device, _pAllocator));
 			}
 		}
+
+		_depthImage = createImage(VK_FORMAT_D32_SFLOAT, _renderArea.extent.width, _renderArea.extent.height, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _queueFamilyIndex, _device, _pAllocator);
+		_depthImageMemory = allocateDeviceMemoryForImage(_device, _depthImage, _physicalDevice, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _pAllocator);
+		vkBindImageMemory(_device, _depthImage, _depthImageMemory, 0);
+		_depthImageView = createImageView(_depthImage, VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, _device, _pAllocator);
+
 		_commandPool = createCommandPool(_queueFamilyIndex, _device, _pAllocator);
 		_descriptorPool = createDescriptorPool(_device, _pAllocator);
 		_imageAvailableSemaphore = createSemaphore(_device, _pAllocator);
@@ -274,11 +296,22 @@ namespace Visor
 			vertexBindingDescription.stride = sizeof(Mesh::Vertex);
 			vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-			VkVertexInputAttributeDescription vertexAttributeDescription = {};
-			vertexAttributeDescription.binding = 0;
-			vertexAttributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
-			vertexAttributeDescription.location = 0;
-			vertexAttributeDescription.offset = 0;
+			VkVertexInputAttributeDescription positionAttributeDescription = {};
+			positionAttributeDescription.binding = 0;
+			positionAttributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
+			positionAttributeDescription.location = 0;
+			positionAttributeDescription.offset = 0;
+
+			VkVertexInputAttributeDescription normalAttributeDescription = {};
+			normalAttributeDescription.binding = 0;
+			normalAttributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
+			normalAttributeDescription.location = 1;
+			normalAttributeDescription.offset = offsetof(Mesh::Vertex, normal);
+
+			VkVertexInputAttributeDescription vertexAttributeDescriptions[] = {
+				positionAttributeDescription,
+				normalAttributeDescription
+			};
 
 			VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
 			vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -286,8 +319,8 @@ namespace Visor
 			vertexInputStateCreateInfo.flags = 0;
 			vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
 			vertexInputStateCreateInfo.pVertexBindingDescriptions = &vertexBindingDescription;
-			vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1;
-			vertexInputStateCreateInfo.pVertexAttributeDescriptions = &vertexAttributeDescription;
+			vertexInputStateCreateInfo.vertexAttributeDescriptionCount = sizeof(vertexAttributeDescriptions) / sizeof(vertexAttributeDescriptions[0]);
+			vertexInputStateCreateInfo.pVertexAttributeDescriptions = vertexAttributeDescriptions;
 
 			entityDrawInfo.graphicsPipeline = createGraphicsPipeline(
 				vertexShaderModule, 

@@ -49,21 +49,27 @@ static void updateCamera(Visor::Camera& camera)
 int main()
 {
 	std::vector<Visor::Entity> entities;
-	std::vector<Visor::Mesh::Vertex> vertices;
-	std::vector<Visor::ui32> indices;
-
+	
 	{
+		std::vector<Visor::Mesh::Vertex> vertices;
+		std::vector<Visor::ui32> indices;
+		
 		TVX_Mesh TVXMesh;
 		TVX_loadMeshFromOBJ("../assets/models/cube.obj", &TVXMesh);
 
 		for(uint32_t vertexIndex = 0; vertexIndex < TVXMesh.vertexCount; ++vertexIndex)
 		{
 			struct TVX_Position position = TVXMesh.pVertices[vertexIndex].position;
+			struct TVX_Normal normal = TVXMesh.pVertices[vertexIndex].normal;
 
 			Visor::Mesh::Vertex vertex;
 			vertex.position.x = position.x;
 			vertex.position.y = position.y;
 			vertex.position.z = position.z;
+
+			vertex.normal.x = normal.x;
+			vertex.normal.y = normal.y;
+			vertex.normal.z = normal.z;
 
 			vertices.push_back(vertex);
 		}
@@ -73,12 +79,11 @@ int main()
 			indices.push_back(TVXMesh.pVertexIndices[vertexI]);
 		}
 
-		std::cout << "\n";
-
 		TVX_destroyMesh(TVXMesh);
 		
 		Visor::Mesh mesh(vertices, indices, "../assets/shaders/intermediate/vertex.spv", "../assets/shaders/intermediate/fragment.spv");
 		Visor::Entity entity({ 0.0f, 0.0f, 3.0f }, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, mesh);
+		
 		entities.push_back(entity);
 	}
 

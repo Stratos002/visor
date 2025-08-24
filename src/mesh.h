@@ -14,6 +14,7 @@ namespace Visor
 		struct Vertex
 		{
 			Vector3<f32> position;
+			Vector3<f32> normal;
 		};
 
 		Mesh(const std::vector<Vertex>& vertices, const std::vector<ui32>& indices, const std::string& vertexShaderName, const std::string& fragmentShaderName);

@@ -1,3 +1,2 @@
-- pouvoir bouger la caméra avec les inputs (clavier/souris)
 - loader un objet + complexe et y ajouter les normales
 - pouvoir bouger des entités (et leur meshes) individuellement à chaque frame
