@@ -330,7 +330,7 @@ namespace Visor
 				VK_FORMAT_D32_SFLOAT, 
 				window.getWidth(), 
 				window.getHeight(), 
-				0, 
+				true, 
 				entityDrawInfo.graphicsPipelineLayout, 
 				_device, 
 				_pAllocator);
@@ -1007,7 +1007,7 @@ namespace Visor
 		VkFormat depthAttachmentFormat,
 		ui32 viewportWidth,
 		ui32 viewportHeight,
-		bool enableDepthWrite,
+		b8 enableDepthWrite,
 		VkPipelineLayout pipelineLayout,
 		VkDevice device,
 		const VkAllocationCallbacks* pAllocator)
@@ -1072,7 +1072,7 @@ namespace Visor
 		rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
 		rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 		rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-		rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE;
+		rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE; // TODO : HUUUH!
 		rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
 		rasterizationStateCreateInfo.depthBiasConstantFactor = 0.0f;
@@ -1154,17 +1154,6 @@ namespace Visor
 
 		*/
 
-
-		/*
-		    VkStructureType    sType;
-    const void*        pNext;
-    uint32_t           viewMask;
-    uint32_t           colorAttachmentCount;
-    const VkFormat*    pColorAttachmentFormats;
-    VkFormat           depthAttachmentFormat;
-    VkFormat           stencilAttachmentFormat;
-		
-		*/
 		VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo = {};
 		pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 		pipelineRenderingCreateInfo.pNext = nullptr;
