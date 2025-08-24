@@ -1,4 +1,5 @@
-#include "renderer_backend_vk.h"
+#include "render_system_backend_vk.h"
+#include "window_system.h"
 
 #define VOLK_IMPLEMENTATION
 #include "volk.h"
@@ -10,9 +11,9 @@
 
 namespace Visor
 {
-	static RendererBackendVk* pInstance = nullptr;
+	static RenderSystemBackendVk* pInstance = nullptr;
 
-	void RendererBackendVk::render(const Camera& camera)
+	void RenderSystemBackendVk::render(const Camera& camera)
 	{
 		assert(pInstance != nullptr);
 
@@ -22,7 +23,7 @@ namespace Visor
 		// ==== update global uniform buffer ====
 		GlobalUniformBuffer globalUniformBuffer = {};
 
-		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, 1.0) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
+		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, _renderArea.extent.width / (f32)_renderArea.extent.height) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
 		globalUniformBuffer.viewProjectionMatrix.transpose();
 
 		void* pGlobalUniformBufferData = nullptr;
@@ -128,26 +129,26 @@ namespace Visor
 		vkQueuePresentKHR(_queue, &presentInfo);
 	}
 
-	void RendererBackendVk::start(Window& window, const std::vector<Entity>& entities)
+	void RenderSystemBackendVk::start(const std::vector<Entity>& entities)
 	{
 		assert(pInstance == nullptr);
-		pInstance = new RendererBackendVk(window, entities);
+		pInstance = new RenderSystemBackendVk(entities);
 	}
 
-	void RendererBackendVk::terminate()
+	void RenderSystemBackendVk::terminate()
 	{
 		assert(pInstance != nullptr);
 		delete pInstance;
 		pInstance = nullptr;
 	}
 
-	RendererBackendVk& RendererBackendVk::getInstance()
+	RenderSystemBackendVk& RenderSystemBackendVk::getInstance()
 	{
 		assert(pInstance != nullptr);
 		return *pInstance;
 	}
 
-	RendererBackendVk::RendererBackendVk(Window& window, const std::vector<Entity>& entities)
+	RenderSystemBackendVk::RenderSystemBackendVk(const std::vector<Entity>& entities)
 		: _pAllocator(nullptr)
 	{
 		if (volkInitialize() != VK_SUCCESS)
@@ -156,6 +157,7 @@ namespace Visor
 			std::exit(EXIT_FAILURE);
 		}
 
+		WindowSystem::Window& window = WindowSystem::getInstance().getWindow();
 		_instance = createInstance(window.getTitle(), window.getTitle(), window.getRequiredVkInstanceExtensions(), _pAllocator);
 		volkLoadInstance(_instance);
 		_surface = window.createVkSurface(_instance, _pAllocator);
@@ -359,7 +361,7 @@ namespace Visor
 		}
 	}
 
-	RendererBackendVk::~RendererBackendVk()
+	RenderSystemBackendVk::~RenderSystemBackendVk()
 	{
 		vkDeviceWaitIdle(_device);
 
@@ -379,7 +381,7 @@ namespace Visor
 		vkDestroyInstance(_instance, _pAllocator);
 	}
 
-	VkInstance RendererBackendVk::createInstance(
+	VkInstance RenderSystemBackendVk::createInstance(
 		const std::string& applicationName,
 		const std::string& engineName,
 		const std::vector<const c8*>& requiredExtensionNames,
@@ -416,7 +418,7 @@ namespace Visor
 		return instance;
 	}
 
-	VkPhysicalDevice RendererBackendVk::pickPhysicalDevice(VkInstance instance)
+	VkPhysicalDevice RenderSystemBackendVk::pickPhysicalDevice(VkInstance instance)
 	{
 		ui32 physicalDeviceCount = 0;
 		vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
@@ -447,7 +449,7 @@ namespace Visor
 		return physicalDevices[0];
 	}
 
-	ui32 RendererBackendVk::findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
+	ui32 RenderSystemBackendVk::findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
 	{
 		ui32 queueFamilyCount = 0;
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
@@ -475,7 +477,7 @@ namespace Visor
 		return -1;
 	}
 
-	VkDevice RendererBackendVk::createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator)
+	VkDevice RenderSystemBackendVk::createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator)
 	{
 		f32 queuePriority = 1.0f;
 		VkDeviceQueueCreateInfo queueCreateInfo = {};
@@ -520,7 +522,7 @@ namespace Visor
 		return device;
 	}
 
-	VkSwapchainKHR RendererBackendVk::createSwapchain(
+	VkSwapchainKHR RenderSystemBackendVk::createSwapchain(
 		VkPhysicalDevice physicalDevice,
 		VkFormat format,
 		ui32 width,
@@ -599,7 +601,7 @@ namespace Visor
 		return swapchain;
 	}
 
-	VkDescriptorPool RendererBackendVk::createDescriptorPool(VkDevice device, const VkAllocationCallbacks* pAllocator)
+	VkDescriptorPool RenderSystemBackendVk::createDescriptorPool(VkDevice device, const VkAllocationCallbacks* pAllocator)
 	{
 		VkDescriptorPoolSize poolSizes[5];
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -635,7 +637,7 @@ namespace Visor
 		return descriptorPool;
 	}
 
-	VkDescriptorSet RendererBackendVk::allocateDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, VkDevice device)
+	VkDescriptorSet RenderSystemBackendVk::allocateDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, VkDevice device)
 	{
 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
 		descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -654,7 +656,7 @@ namespace Visor
 		return descriptorSet;
 	}
 
-	VkCommandPool RendererBackendVk::createCommandPool(ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator)
+	VkCommandPool RenderSystemBackendVk::createCommandPool(ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator)
 	{
 		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
 		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -672,7 +674,7 @@ namespace Visor
 		return commandPool;
 	}
 
-	VkCommandBuffer RendererBackendVk::allocateCommandBuffer(VkCommandPool commandPool, VkDevice device)
+	VkCommandBuffer RenderSystemBackendVk::allocateCommandBuffer(VkCommandPool commandPool, VkDevice device)
 	{
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
 		commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -691,7 +693,7 @@ namespace Visor
 		return commandBuffer;
 	}
 
-	VkBuffer RendererBackendVk::createBuffer(ui32 size, VkBufferUsageFlags usage, ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator)
+	VkBuffer RenderSystemBackendVk::createBuffer(ui32 size, VkBufferUsageFlags usage, ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator)
 	{
 		VkBufferCreateInfo bufferCreateInfo = {};
 		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -713,7 +715,7 @@ namespace Visor
 		return buffer;
 	}
 
-	VkImage RendererBackendVk::createImage(
+	VkImage RenderSystemBackendVk::createImage(
 		VkFormat format,
 		ui32 width,
 		ui32 height,
@@ -751,7 +753,7 @@ namespace Visor
 		return image;
 	}
 
-	VkImageView RendererBackendVk::createImageView(
+	VkImageView RenderSystemBackendVk::createImageView(
 		VkImage image,
 		VkFormat format,
 		VkImageAspectFlags aspectFlags,
@@ -785,7 +787,7 @@ namespace Visor
 		return imageView;
 	}
 
-	ui32 RendererBackendVk::findMemoryTypeIndex(
+	ui32 RenderSystemBackendVk::findMemoryTypeIndex(
 		VkPhysicalDevice physicalDevice,
 		ui32 compatibleMemoryTypeBits,
 		VkMemoryPropertyFlags memoryPropertyFlags)
@@ -808,7 +810,7 @@ namespace Visor
 		return -1;
 	}
 
-	VkDeviceMemory RendererBackendVk::allocateDeviceMemoryForBuffer(
+	VkDeviceMemory RenderSystemBackendVk::allocateDeviceMemoryForBuffer(
 		VkDevice device,
 		VkBuffer buffer,
 		VkPhysicalDevice physicalDevice,
@@ -834,7 +836,7 @@ namespace Visor
 		return deviceMemory;
 	}
 
-	VkDeviceMemory RendererBackendVk::allocateDeviceMemoryForImage(
+	VkDeviceMemory RenderSystemBackendVk::allocateDeviceMemoryForImage(
 		VkDevice device,
 		VkImage image,
 		VkPhysicalDevice physicalDevice,
@@ -860,7 +862,7 @@ namespace Visor
 		return deviceMemory;
 	}
 
-	VkDescriptorSetLayout RendererBackendVk::createDescriptorSetLayout(
+	VkDescriptorSetLayout RenderSystemBackendVk::createDescriptorSetLayout(
 		const std::vector<VkDescriptorSetLayoutBinding>& bindings,
 		VkDevice device,
 		const VkAllocationCallbacks* pAllocator)
@@ -882,7 +884,7 @@ namespace Visor
 		return descriptorSetLayout;
 	}
 
-	VkPipelineLayout RendererBackendVk::createPipelineLayout(
+	VkPipelineLayout RenderSystemBackendVk::createPipelineLayout(
 		const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 		ui32 pushConstantRangeCount,
 		const VkPushConstantRange* pPushConstantRanges,
@@ -908,7 +910,7 @@ namespace Visor
 		return pipelineLayout;
 	}
 
-	VkShaderModule RendererBackendVk::createShaderModule(
+	VkShaderModule RenderSystemBackendVk::createShaderModule(
 		ui32 size,
 		const ui32* pCode,
 		VkDevice device,
@@ -931,7 +933,7 @@ namespace Visor
 		return shaderModule;
 	}
 
-	VkPipeline RendererBackendVk::createComputePipeline(
+	VkPipeline RenderSystemBackendVk::createComputePipeline(
 		VkShaderModule shaderModule,
 		VkPipelineLayout pipelineLayout,
 		VkDevice device,
@@ -964,7 +966,7 @@ namespace Visor
 		return computePipeline;
 	}
 
-	VkPipeline RendererBackendVk::createGraphicsPipeline(
+	VkPipeline RenderSystemBackendVk::createGraphicsPipeline(
 		VkShaderModule vertexShaderModule,
 		VkShaderModule fragmentShaderModule,
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo,
@@ -1170,7 +1172,7 @@ namespace Visor
 		return graphicsPipeline;
 	}
 
-	VkFence RendererBackendVk::createFence(VkDevice device, const VkAllocationCallbacks* pAllocator)
+	VkFence RenderSystemBackendVk::createFence(VkDevice device, const VkAllocationCallbacks* pAllocator)
 	{
 		VkFenceCreateInfo fenceCreateInfo = {};
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -1187,7 +1189,7 @@ namespace Visor
 		return fence;
 	}
 
-	VkSemaphore RendererBackendVk::createSemaphore(VkDevice device, const VkAllocationCallbacks* pAllocator)
+	VkSemaphore RenderSystemBackendVk::createSemaphore(VkDevice device, const VkAllocationCallbacks* pAllocator)
 	{
 		VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 		semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1204,7 +1206,7 @@ namespace Visor
 		return semaphore;
 	}
 
-	void RendererBackendVk::readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode)
+	void RenderSystemBackendVk::readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode)
 	{
 		FILE* pFile = fopen(shaderPath.c_str(), "rb");
 		if (pFile == NULL)

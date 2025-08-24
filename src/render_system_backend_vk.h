@@ -1,7 +1,6 @@
 #pragma once
 
 #include "types.h"
-#include "window.h"
 #include "camera.h"
 #include "entity.h"
 #include "maths.h"
@@ -13,14 +12,14 @@
 
 namespace Visor
 {
-	class RendererBackendVk
+	class RenderSystemBackendVk
 	{
 	public:
 		void render(const Camera& camera);
 
-		static void start(Window& window, const std::vector<Entity>& entities);
+		static void start(const std::vector<Entity>& entities);
 		static void terminate();
-		static RendererBackendVk& getInstance();
+		static RenderSystemBackendVk& getInstance();
 
 	private:
 		struct EntityDrawInfo
@@ -49,8 +48,8 @@ namespace Visor
 		};
 
 	private:
-		RendererBackendVk(Window& window, const std::vector<Entity>& entities);
-		~RendererBackendVk();
+		RenderSystemBackendVk(const std::vector<Entity>& entities);
+		~RenderSystemBackendVk();
 
 		VkInstance createInstance(
 			const std::string& applicationName,
