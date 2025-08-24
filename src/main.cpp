@@ -42,7 +42,7 @@ int main()
 
 		std::cout << "\n";
 
-		TVX_freeMesh(mesh);
+		TVX_destroyMesh(mesh);
 	}
 
 	Visor::Mesh mesh(vertices, indices, "../assets/shaders/intermediate/vertex.spv", "../assets/shaders/intermediate/fragment.spv");
