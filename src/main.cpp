@@ -25,7 +25,7 @@ static void updateCamera(Visor::Camera& camera)
 	Visor::f32 previousMouseY = 0.0f;
 	Visor::InputSystem::getInstance().getPreviousMousePosition(previousMouseX, previousMouseY);
 
-	Visor::f32 dx = currentMouseX - previousMouseX;
+	Visor::f32 dx = previousMouseX - currentMouseX;
 	Visor::f32 dy = previousMouseY - currentMouseY;
 
 	const Visor::f32 yaw = dx * 0.01f;
@@ -46,6 +46,14 @@ static void updateCamera(Visor::Camera& camera)
 	camera.position = camera.position + scaledRotatedForwardVector;
 }
 
+static void updateEntities(std::vector<Visor::Entity>& entities)
+{
+	for(Visor::Entity& entity : entities)
+	{
+		entity.yaw += 0.001;
+	}
+}
+
 int main()
 {
 	std::vector<Visor::Entity> entities;
@@ -55,7 +63,7 @@ int main()
 		std::vector<Visor::ui32> indices;
 		
 		TVX_Mesh TVXMesh;
-		TVX_loadMeshFromOBJ("../assets/models/cube.obj", &TVXMesh);
+		TVX_loadMeshFromOBJ("../assets/models/teapot.obj", &TVXMesh);
 
 		for(uint32_t vertexIndex = 0; vertexIndex < TVXMesh.vertexCount; ++vertexIndex)
 		{
@@ -89,7 +97,7 @@ int main()
 
 	Visor::InputSystem::start();
 	Visor::WindowSystem::start(1000, 700);
-	Visor::RenderSystem::start(entities);
+	Visor::RenderSystem::start();
 
 	Visor::Camera camera = {};
 	camera.fov = 1.2f;
@@ -101,8 +109,9 @@ int main()
 		Visor::WindowSystem::getInstance().pollEvents();
 
 		updateCamera(camera);
+		updateEntities(entities);
 		
-		Visor::RenderSystem::getInstance().render(camera);
+		Visor::RenderSystem::getInstance().render(camera, entities);
 	}
 
 	Visor::RenderSystem::terminate();

@@ -13,23 +13,15 @@ namespace Visor
 {
 	static RenderSystemBackendVk* pInstance = nullptr;
 
-	void RenderSystemBackendVk::render(const Camera& camera)
+	void RenderSystemBackendVk::render(const Camera& camera, const std::vector<Entity>& entities)
 	{
 		assert(pInstance != nullptr);
 
 		vkWaitForFences(_device, 1, &_commandBufferExecutedFence, VK_FALSE, UINT64_MAX);
 		vkResetFences(_device, 1, &_commandBufferExecutedFence);
 
-		// ==== update global uniform buffer ====
-		GlobalUniformBuffer globalUniformBuffer = {};
-
-		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, _renderArea.extent.width / (f32)_renderArea.extent.height) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
-		globalUniformBuffer.viewProjectionMatrix.transpose();
-
-		void* pGlobalUniformBufferData = nullptr;
-		vkMapMemory(_device, _globalUniformBufferMemory, 0, sizeof(GlobalUniformBuffer), 0, &pGlobalUniformBufferData);
-		std::memcpy(pGlobalUniformBufferData, &globalUniformBuffer, sizeof(GlobalUniformBuffer));
-		vkUnmapMemory(_device, _globalUniformBufferMemory);
+		updateGlobalUniformBuffer(camera);
+		updateEntityDrawInfos(entities);
 
 		ui32 availableSwapchainImageIndex = 0;
 		if (vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailableSemaphore, VK_NULL_HANDLE, &availableSwapchainImageIndex) != VK_SUCCESS)
@@ -145,10 +137,10 @@ namespace Visor
 		vkQueuePresentKHR(_queue, &presentInfo);
 	}
 
-	void RenderSystemBackendVk::start(const std::vector<Entity>& entities)
+	void RenderSystemBackendVk::start()
 	{
 		assert(pInstance == nullptr);
-		pInstance = new RenderSystemBackendVk(entities);
+		pInstance = new RenderSystemBackendVk();
 	}
 
 	void RenderSystemBackendVk::terminate()
@@ -164,7 +156,7 @@ namespace Visor
 		return *pInstance;
 	}
 
-	RenderSystemBackendVk::RenderSystemBackendVk(const std::vector<Entity>& entities)
+	RenderSystemBackendVk::RenderSystemBackendVk()
 		: _pAllocator(nullptr)
 	{
 		if (volkInitialize() != VK_SUCCESS)
@@ -250,8 +242,55 @@ namespace Visor
 		globalUniformBufferDescriptorWrite.pBufferInfo = &globalUniformBufferInfo;
 
 		vkUpdateDescriptorSets(_device, 1, &globalUniformBufferDescriptorWrite, 0, nullptr);
+	}
 
-		for (const Entity& entity : entities)
+	RenderSystemBackendVk::~RenderSystemBackendVk()
+	{
+		vkDeviceWaitIdle(_device);
+
+		destroyFrameObjects();
+
+		vkDestroyFence(_device, _commandBufferExecutedFence, _pAllocator);
+		vkDestroySemaphore(_device, _imageAvailableSemaphore, _pAllocator);
+		for (ui32 swapchainImageIndex = 0; swapchainImageIndex < _swapchainImages.size(); ++swapchainImageIndex)
+		{
+			vkDestroySemaphore(_device, _imageRenderedSemaphores[swapchainImageIndex], _pAllocator);
+			vkDestroyImageView(_device, _swapchainImageViews[swapchainImageIndex], _pAllocator);
+		}
+		vkDestroySwapchainKHR(_device, _swapchain, _pAllocator);
+
+		vkDestroyDescriptorPool(_device, _descriptorPool, _pAllocator);
+		vkDestroyCommandPool(_device, _commandPool, _pAllocator);
+		vkDestroyDevice(_device, _pAllocator);
+		vkDestroySurfaceKHR(_instance, _surface, _pAllocator);
+		vkDestroyInstance(_instance, _pAllocator);
+	}
+
+	void RenderSystemBackendVk::updateGlobalUniformBuffer(const Camera& camera)
+	{
+		GlobalUniformBuffer globalUniformBuffer = {};
+
+		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, _renderArea.extent.width / (f32)_renderArea.extent.height) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
+		globalUniformBuffer.viewProjectionMatrix.transpose();
+
+		void* pGlobalUniformBufferData = nullptr;
+		vkMapMemory(_device, _globalUniformBufferMemory, 0, sizeof(GlobalUniformBuffer), 0, &pGlobalUniformBufferData);
+		std::memcpy(pGlobalUniformBufferData, &globalUniformBuffer, sizeof(GlobalUniformBuffer));
+		vkUnmapMemory(_device, _globalUniformBufferMemory);
+	}
+
+	void RenderSystemBackendVk::updateEntityDrawInfos(const std::vector<Entity>& entities)
+	{
+		// destroy previous frame entity draw infos first
+		destroyEntityDrawInfos();
+
+		// (re)create current frame entity draw infos
+		createEntityDrawInfos(entities);
+	}
+
+	void RenderSystemBackendVk::createEntityDrawInfos(const std::vector<Entity>& entities)
+	{
+		for(const Entity& entity : entities)
 		{
 			EntityDrawInfo entityDrawInfo = {};
 			
@@ -328,12 +367,15 @@ namespace Visor
 				vertexInputStateCreateInfo, 
 				_swapchainFormat, 
 				VK_FORMAT_D32_SFLOAT, 
-				window.getWidth(), 
-				window.getHeight(), 
+				_renderArea.extent.width, 
+				_renderArea.extent.height, 
 				true, 
 				entityDrawInfo.graphicsPipelineLayout, 
 				_device, 
 				_pAllocator);
+
+			vkDestroyShaderModule(_device, vertexShaderModule, _pAllocator);
+			vkDestroyShaderModule(_device, fragmentShaderModule, _pAllocator);
 
 			entityDrawInfo.vertexBuffer = createBuffer(sizeof(Mesh::Vertex) * entity.getMesh().getVertices().size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, _queueFamilyIndex, _device, _pAllocator);
 			entityDrawInfo.vertexBufferMemory = allocateDeviceMemoryForBuffer(_device, entityDrawInfo.vertexBuffer, _physicalDevice, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _pAllocator);
@@ -362,7 +404,6 @@ namespace Visor
 			entityUniformBufferInfo.buffer = entityDrawInfo.uniformBuffer;
 			entityUniformBufferInfo.offset = 0;
 			entityUniformBufferInfo.range = VK_WHOLE_SIZE;
-
 
 			VkWriteDescriptorSet entityUniformBufferDescriptorWrite = {};
 			entityUniformBufferDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -394,24 +435,36 @@ namespace Visor
 		}
 	}
 
-	RenderSystemBackendVk::~RenderSystemBackendVk()
+	void RenderSystemBackendVk::destroyEntityDrawInfos()
 	{
-		vkDeviceWaitIdle(_device);
-
-		vkDestroyFence(_device, _commandBufferExecutedFence, _pAllocator);
-		vkDestroySemaphore(_device, _imageAvailableSemaphore, _pAllocator);
-		for (ui32 swapchainImageIndex = 0; swapchainImageIndex < _swapchainImages.size(); ++swapchainImageIndex)
+		for(EntityDrawInfo& entityDrawInfo : _entityDrawInfos)
 		{
-			vkDestroySemaphore(_device, _imageRenderedSemaphores[swapchainImageIndex], _pAllocator);
-			vkDestroyImageView(_device, _swapchainImageViews[swapchainImageIndex], _pAllocator);
+			vkDestroyDescriptorSetLayout(_device, entityDrawInfo.entityDescriptorSetLayout, _pAllocator);
+			vkFreeDescriptorSets(_device, _descriptorPool, 1, &entityDrawInfo.entityDescriptorSet);
+			vkDestroyPipelineLayout(_device, entityDrawInfo.graphicsPipelineLayout, _pAllocator);
+			vkDestroyPipeline(_device, entityDrawInfo.graphicsPipeline, _pAllocator);
+			vkFreeMemory(_device, entityDrawInfo.vertexBufferMemory, _pAllocator);
+			vkDestroyBuffer(_device, entityDrawInfo.vertexBuffer, _pAllocator);
+			vkFreeMemory(_device, entityDrawInfo.indexBufferMemory, _pAllocator);
+			vkDestroyBuffer(_device, entityDrawInfo.indexBuffer, _pAllocator);
+			vkFreeMemory(_device, entityDrawInfo.uniformBufferMemory, _pAllocator);
+			vkDestroyBuffer(_device, entityDrawInfo.uniformBuffer, _pAllocator);
 		}
-		vkDestroySwapchainKHR(_device, _swapchain, _pAllocator);
 
-		vkDestroyDescriptorPool(_device, _descriptorPool, _pAllocator);
-		vkDestroyCommandPool(_device, _commandPool, _pAllocator);
-		vkDestroyDevice(_device, _pAllocator);
-		vkDestroySurfaceKHR(_instance, _surface, _pAllocator);
-		vkDestroyInstance(_instance, _pAllocator);
+		_entityDrawInfos.clear();
+	}
+
+	void RenderSystemBackendVk::destroyFrameObjects()
+	{
+		destroyEntityDrawInfos();
+
+		vkFreeMemory(_device, _globalUniformBufferMemory, _pAllocator);
+		vkDestroyBuffer(_device, _globalUniformBuffer, _pAllocator);
+		vkDestroyDescriptorSetLayout(_device, _globalDescriptorSetLayout, _pAllocator);
+		vkFreeDescriptorSets(_device, _descriptorPool, 1, &_globalDescriptorSet);
+		vkDestroyImageView(_device, _depthImageView, _pAllocator);
+		vkFreeMemory(_device, _depthImageMemory, _pAllocator);
+		vkDestroyImage(_device, _depthImage, _pAllocator);
 	}
 
 	VkInstance RenderSystemBackendVk::createInstance(

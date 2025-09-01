@@ -15,9 +15,9 @@ namespace Visor
 	class RenderSystemBackendVk
 	{
 	public:
-		void render(const Camera& camera);
+		void render(const Camera& camera, const std::vector<Entity>& entities);
 
-		static void start(const std::vector<Entity>& entities);
+		static void start();
 		static void terminate();
 		static RenderSystemBackendVk& getInstance();
 
@@ -48,18 +48,24 @@ namespace Visor
 		};
 
 	private:
-		RenderSystemBackendVk(const std::vector<Entity>& entities);
+		RenderSystemBackendVk();
 		~RenderSystemBackendVk();
 
-		VkInstance createInstance(
+		void updateGlobalUniformBuffer(const Camera& camera);
+		void updateEntityDrawInfos(const std::vector<Entity>& entities);
+		void createEntityDrawInfos(const std::vector<Entity>& entities);
+		void destroyEntityDrawInfos();
+		void destroyFrameObjects();
+
+		static VkInstance createInstance(
 			const std::string& applicationName,
 			const std::string& engineName,
 			const std::vector<const c8*>& requiredExtensionNames,
 			const VkAllocationCallbacks* pAllocator);
-		VkPhysicalDevice pickPhysicalDevice(VkInstance instance);
-		ui32 findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-		VkDevice createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator);
-		VkSwapchainKHR createSwapchain(
+		static VkPhysicalDevice pickPhysicalDevice(VkInstance instance);
+		static ui32 findQueueFamilyIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+		static VkDevice createDevice(ui32 queueFamilyIndex, VkPhysicalDevice physicalDevice, const VkAllocationCallbacks* pAllocator);
+		static VkSwapchainKHR createSwapchain(
 			VkPhysicalDevice physicalDevice,
 			VkFormat format,
 			ui32 width,
@@ -68,12 +74,12 @@ namespace Visor
 			VkSurfaceKHR surface,
 			ui32 queueFamilyIndex,
 			const VkAllocationCallbacks* pAllocator);
-		VkDescriptorPool createDescriptorPool(VkDevice device, const VkAllocationCallbacks* pAllocator);
-		VkDescriptorSet allocateDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, VkDevice device);
-		VkCommandPool createCommandPool(ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator);
-		VkCommandBuffer allocateCommandBuffer(VkCommandPool commandPool, VkDevice device);
-		VkBuffer createBuffer(ui32 size, VkBufferUsageFlags usage, ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator);
-		VkImage createImage(
+		static VkDescriptorPool createDescriptorPool(VkDevice device, const VkAllocationCallbacks* pAllocator);
+		static VkDescriptorSet allocateDescriptorSet(VkDescriptorPool descriptorPool, VkDescriptorSetLayout descriptorSetLayout, VkDevice device);
+		static VkCommandPool createCommandPool(ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator);
+		static VkCommandBuffer allocateCommandBuffer(VkCommandPool commandPool, VkDevice device);
+		static VkBuffer createBuffer(ui32 size, VkBufferUsageFlags usage, ui32 queueFamilyIndex, VkDevice device, const VkAllocationCallbacks* pAllocator);
+		static VkImage createImage(
 			VkFormat format,
 			ui32 width,
 			ui32 height,
@@ -81,49 +87,49 @@ namespace Visor
 			ui32 queueFamilyIndex,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkImageView createImageView(
+		static VkImageView createImageView(
 			VkImage image,
 			VkFormat format,
 			VkImageAspectFlags aspectFlags,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		ui32 findMemoryTypeIndex(
+		static ui32 findMemoryTypeIndex(
 			VkPhysicalDevice physicalDevice,
 			ui32 compatibleMemoryTypeBits,
 			VkMemoryPropertyFlags memoryPropertyFlags);
-		VkDeviceMemory allocateDeviceMemoryForBuffer(
+		static VkDeviceMemory allocateDeviceMemoryForBuffer(
 			VkDevice device,
 			VkBuffer buffer,
 			VkPhysicalDevice physicalDevice,
 			VkMemoryPropertyFlags memoryPropertyFlags,
 			const VkAllocationCallbacks* pAllocator);
-		VkDeviceMemory allocateDeviceMemoryForImage(
+		static VkDeviceMemory allocateDeviceMemoryForImage(
 			VkDevice device,
 			VkImage image,
 			VkPhysicalDevice physicalDevice,
 			VkMemoryPropertyFlags memoryPropertyFlags,
 			const VkAllocationCallbacks* pAllocator);
-		VkDescriptorSetLayout createDescriptorSetLayout(
+		static VkDescriptorSetLayout createDescriptorSetLayout(
 			const std::vector<VkDescriptorSetLayoutBinding>& bindings,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkPipelineLayout createPipelineLayout(
+		static VkPipelineLayout createPipelineLayout(
 			const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts,
 			ui32 pushConstantRangeCount,
 			const VkPushConstantRange* pPushConstantRanges,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkShaderModule createShaderModule(
+		static VkShaderModule createShaderModule(
 			ui32 size,
 			const ui32* pCode,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkPipeline createComputePipeline(
+		static VkPipeline createComputePipeline(
 			VkShaderModule shaderModule,
 			VkPipelineLayout pipelineLayout,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkPipeline createGraphicsPipeline(
+		static VkPipeline createGraphicsPipeline(
 			VkShaderModule vertexShaderModule,
 			VkShaderModule fragmentShaderModule,
 			VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo,
@@ -135,10 +141,9 @@ namespace Visor
 			VkPipelineLayout pipelineLayout,
 			VkDevice device,
 			const VkAllocationCallbacks* pAllocator);
-		VkFence createFence(VkDevice device, const VkAllocationCallbacks* pAllocator);
-		VkSemaphore createSemaphore(VkDevice device, const VkAllocationCallbacks* pAllocator);
-
-		void readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode);
+		static VkFence createFence(VkDevice device, const VkAllocationCallbacks* pAllocator);
+		static VkSemaphore createSemaphore(VkDevice device, const VkAllocationCallbacks* pAllocator);		
+		static void readShader(const std::string& shaderPath, ui32* pSize, ui32** ppCode);
 
 	private:
 		VkAllocationCallbacks* _pAllocator;
