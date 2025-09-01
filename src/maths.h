@@ -227,7 +227,7 @@ namespace Visor
 		const T zFar = T(10000);
 
 		result.m[0][0] = invTanHalfFov / aspectRatio;
-		result.m[1][1] = -invTanHalfFov;
+		result.m[1][1] = invTanHalfFov;
 		result.m[2][2] = T(1);
 		result.m[2][3] = -zNear;
 		result.m[3][2] = T(1);

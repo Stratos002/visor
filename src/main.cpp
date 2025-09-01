@@ -2,8 +2,62 @@
 
 #include <trivex.h>
 
+#include <string>
 #include <iostream>
 #include <vector>
+#include <random>
+
+static Visor::Mesh loadMesh(const std::string& meshPath)
+{
+	std::vector<Visor::Mesh::Vertex> vertices;
+	std::vector<Visor::ui32> indices;
+
+	TVX_Mesh TVXMesh;
+	TVX_loadMeshFromOBJ(meshPath.c_str(), &TVXMesh);
+
+	for(uint32_t vertexIndex = 0; vertexIndex < TVXMesh.vertexCount; ++vertexIndex)
+	{
+		struct TVX_Position position = TVXMesh.pVertices[vertexIndex].position;
+		struct TVX_Normal normal = TVXMesh.pVertices[vertexIndex].normal;
+
+		Visor::Mesh::Vertex vertex = {};
+		vertex.position.x = position.x;
+		vertex.position.y = position.y;
+		vertex.position.z = position.z;
+		vertex.normal.x = normal.x;
+		vertex.normal.y = normal.y;
+		vertex.normal.z = normal.z;
+
+		vertices.push_back(vertex);
+	}
+
+	for(uint32_t vertexIndexIndex = 0; vertexIndexIndex < TVXMesh.vertexIndexCount; ++vertexIndexIndex)
+	{
+		indices.push_back(TVXMesh.pVertexIndices[vertexIndexIndex]);
+	}
+
+	TVX_destroyMesh(TVXMesh);
+
+	return Visor::Mesh(vertices, indices, "../assets/shaders/intermediate/vertex.spv", "../assets/shaders/intermediate/fragment.spv");
+}
+
+static void createEntities(std::vector<Visor::Entity>& entities)
+{
+	Visor::Mesh mesh = loadMesh("../assets/models/teapot.obj");
+
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> distrib(-5, 5);
+
+	const Visor::ui32 entityCount = 10;
+	const Visor::f32 scale = 0.1f;
+
+	for(Visor::ui32 entityIndex = 0; entityIndex < entityCount; ++entityIndex)
+	{
+		Visor::Entity entity({(Visor::f32)distrib(gen), (Visor::f32)distrib(gen), (Visor::f32)distrib(gen)}, scale, scale, scale, 0.0f, 0.0f, 0.0f, mesh);	
+		entities.push_back(entity);
+	}
+}
 
 static void updateCamera(Visor::Camera& camera)
 {
@@ -48,8 +102,9 @@ static void updateCamera(Visor::Camera& camera)
 
 static void updateEntities(std::vector<Visor::Entity>& entities)
 {
-	for(Visor::Entity& entity : entities)
+	for(Visor::ui32 entityIndex = 0; entityIndex < entities.size(); ++entityIndex)
 	{
+		Visor::Entity& entity = entities[entityIndex];
 		entity.yaw += 0.001;
 	}
 }
@@ -57,43 +112,7 @@ static void updateEntities(std::vector<Visor::Entity>& entities)
 int main()
 {
 	std::vector<Visor::Entity> entities;
-	
-	{
-		std::vector<Visor::Mesh::Vertex> vertices;
-		std::vector<Visor::ui32> indices;
-		
-		TVX_Mesh TVXMesh;
-		TVX_loadMeshFromOBJ("../assets/models/teapot.obj", &TVXMesh);
-
-		for(uint32_t vertexIndex = 0; vertexIndex < TVXMesh.vertexCount; ++vertexIndex)
-		{
-			struct TVX_Position position = TVXMesh.pVertices[vertexIndex].position;
-			struct TVX_Normal normal = TVXMesh.pVertices[vertexIndex].normal;
-
-			Visor::Mesh::Vertex vertex;
-			vertex.position.x = position.x;
-			vertex.position.y = position.y;
-			vertex.position.z = position.z;
-
-			vertex.normal.x = normal.x;
-			vertex.normal.y = normal.y;
-			vertex.normal.z = normal.z;
-
-			vertices.push_back(vertex);
-		}
-
-		for(uint32_t vertexI = 0; vertexI < TVXMesh.vertexIndexCount; ++vertexI)
-		{
-			indices.push_back(TVXMesh.pVertexIndices[vertexI]);
-		}
-
-		TVX_destroyMesh(TVXMesh);
-		
-		Visor::Mesh mesh(vertices, indices, "../assets/shaders/intermediate/vertex.spv", "../assets/shaders/intermediate/fragment.spv");
-		Visor::Entity entity({ 0.0f, 0.0f, 3.0f }, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, mesh);
-		
-		entities.push_back(entity);
-	}
+	createEntities(entities);
 
 	Visor::InputSystem::start();
 	Visor::WindowSystem::start(1000, 700);
