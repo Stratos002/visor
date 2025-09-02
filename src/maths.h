@@ -14,6 +14,9 @@ namespace Visor
 	struct Matrix3;
 
 	template<typename T>
+	struct Vector4;
+
+	template<typename T>
 	struct Vector3;
 
 	// ===== Matrix4 =====
@@ -25,6 +28,7 @@ namespace Visor
 		Matrix3<T> getUpperLeft() const;
 		
 		Matrix4<T> operator*(const Matrix4<T>& matrix) const;
+		Vector4<T> operator*(const Vector4<T>& vector) const;
 
 		static Matrix4<T> getIdentity();
 		static Matrix4<T> getScaling(T scalingX, T scalingY, T scalingZ);
@@ -84,6 +88,19 @@ namespace Visor
 				}
 			}
 		}
+
+		return result;
+	}
+
+	template<typename T>
+	Vector4<T> Matrix4<T>::operator*(const Vector4<T>& vector) const
+	{
+		Vector4<T> result = {};
+
+		result.x = m[0][0] * vector.x + m[0][1] * vector.y + m[0][2] * vector.z + m[0][3] * vector.w;
+		result.y = m[1][0] * vector.x + m[1][1] * vector.y + m[1][2] * vector.z + m[1][3] * vector.w;
+		result.z = m[2][0] * vector.x + m[2][1] * vector.y + m[2][2] * vector.z + m[2][3] * vector.w;
+		result.w = m[3][0] * vector.x + m[3][1] * vector.y + m[3][2] * vector.z + m[3][3] * vector.w;
 
 		return result;
 	}

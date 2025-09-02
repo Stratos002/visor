@@ -13,6 +13,14 @@ namespace Visor
 		, _mesh(mesh)
 	{}
 
+	void Entity::lookAt(const Vector3<f32>& position)
+	{
+		Vector3<f32> direction = position - this->position;
+		direction.normalize();
+		yaw = std::atan2(-direction.x, direction.z);
+		pitch = std::asin(direction.y);
+	}
+
 	const Mesh& Entity::getMesh() const
 	{
 		return _mesh;

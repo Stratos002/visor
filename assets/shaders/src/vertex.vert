@@ -18,5 +18,5 @@ layout(location = 0) out vec3 outNormal;
 void main()
 {
 	gl_Position = viewProjection * transformation * vec4(position, 1.0);
-	outNormal = normal;
+	outNormal = normalize((transformation * vec4(normal, 0.0)).xyz);
 }

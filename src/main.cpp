@@ -41,10 +41,8 @@ static Visor::Mesh loadMesh(const std::string& meshPath)
 	return Visor::Mesh(vertices, indices, "../assets/shaders/intermediate/vertex.spv", "../assets/shaders/intermediate/fragment.spv");
 }
 
-static void createEntities(std::vector<Visor::Entity>& entities)
+static void addRandomEntities(const Visor::Mesh& mesh, std::vector<Visor::Entity>& entities)
 {
-	Visor::Mesh mesh = loadMesh("../assets/models/teapot.obj");
-
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<> distrib(-5, 5);
@@ -59,9 +57,10 @@ static void createEntities(std::vector<Visor::Entity>& entities)
 	}
 }
 
-static void updateCamera(Visor::Camera& camera)
+static void updatePlayer(Visor::Entity& player)
 {
 	Visor::f32 speed = 0.0f;
+
 	if(Visor::InputSystem::getInstance().isKeyPressed(Visor::InputSystem::Key::W))
 	{
 		speed += 0.01f;
@@ -85,34 +84,62 @@ static void updateCamera(Visor::Camera& camera)
 	const Visor::f32 yaw = dx * 0.01f;
 	const Visor::f32 pitch = dy * 0.01f;
 
-	camera.yaw += yaw;
-	camera.pitch += pitch;
+	player.yaw += yaw;
+	player.pitch += pitch;
 	
 	Visor::Vector3<Visor::f32> forward = {
 			0.0f,
 			0.0f,
 			1.0f,
 	};
-	const Visor::Matrix3<Visor::f32> rotation = (Visor::Matrix4<Visor::f32>::getRotation(camera.yaw, camera.pitch, 0.0f)).getUpperLeft();
+	const Visor::Matrix3<Visor::f32> rotation = (Visor::Matrix4<Visor::f32>::getRotation(player.yaw, player.pitch, 0.0f)).getUpperLeft();
 	const Visor::Vector3<Visor::f32> rotatedForward = rotation * forward;
 	const Visor::Vector3<Visor::f32> scaledRotatedForwardVector = rotatedForward * speed;
 	
-	camera.position = camera.position + scaledRotatedForwardVector;
+	player.position = player.position + scaledRotatedForwardVector;
 }
 
-static void updateEntities(std::vector<Visor::Entity>& entities)
+static void updateOtherEntities(std::vector<Visor::Entity>& entities)
 {
-	for(Visor::ui32 entityIndex = 0; entityIndex < entities.size(); ++entityIndex)
+	for(Visor::ui32 i = 1; i < entities.size(); ++i)
 	{
-		Visor::Entity& entity = entities[entityIndex];
-		entity.yaw += 0.001;
+		entities[i].lookAt(entities[0].position);
 	}
+}
+
+static void updateCamera(const Visor::Entity& player, Visor::Camera& camera)
+{
+	Visor::Vector3<Visor::f32> playerViewDir = {
+			0.0f,
+			0.0f,
+			1.0f,
+	};
+
+	const Visor::Matrix4<Visor::f32> translation = Visor::Matrix4<Visor::f32>::getTranslation(player.position);
+	const Visor::Matrix4<Visor::f32> rotation = Visor::Matrix4<Visor::f32>::getRotation(player.yaw, player.pitch, 0.0f);
+	const Visor::Vector3<Visor::f32> rotatedForward = rotation.getUpperLeft() * playerViewDir;
+
+	Visor::Vector4<Visor::f32> cameraPosition = {0.0f, 3.0f, -5.0f, 1.0f};
+	cameraPosition = translation * rotation * cameraPosition;
+	
+	camera.position.x = cameraPosition.x;
+	camera.position.y = cameraPosition.y;
+	camera.position.z = cameraPosition.z;
+
+	camera.yaw = player.yaw;
+	camera.pitch = player.pitch;
 }
 
 int main()
 {
 	std::vector<Visor::Entity> entities;
-	createEntities(entities);
+	
+	const Visor::Mesh cubeMesh = loadMesh("../assets/models/cube.obj");
+	const Visor::Mesh teapotMesh = loadMesh("../assets/models/teapot.obj");
+	
+	Visor::Entity player({0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, cubeMesh);
+	entities.push_back(player);
+	addRandomEntities(teapotMesh, entities);
 
 	Visor::InputSystem::start();
 	Visor::WindowSystem::start(1000, 700);
@@ -127,8 +154,9 @@ int main()
 		Visor::InputSystem::getInstance().update();
 		Visor::WindowSystem::getInstance().pollEvents();
 
-		updateCamera(camera);
-		updateEntities(entities);
+		updatePlayer(entities[0]);
+		updateOtherEntities(entities);
+		updateCamera(entities[0], camera);
 		
 		Visor::RenderSystem::getInstance().render(camera, entities);
 	}

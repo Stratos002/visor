@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "math.h"
+#include "maths.h"
 #include "mesh.h"
 
 namespace Visor
@@ -10,6 +10,8 @@ namespace Visor
 	{
 	public:
 		Entity(const Vector3<f32>& position, f32 scaleX, f32 scaleY, f32 scaleZ, f32 yaw, f32 pitch, f32 roll, const Mesh& mesh);
+
+		void lookAt(const Vector3<f32>& position);
 
 		const Mesh& getMesh() const;
 
