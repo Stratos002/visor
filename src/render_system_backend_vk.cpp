@@ -270,7 +270,10 @@ namespace Visor
 	{
 		GlobalUniformBuffer globalUniformBuffer = {};
 
-		globalUniformBuffer.viewProjectionMatrix = Matrix4<f32>::getProjection(camera.fov, _renderArea.extent.width / (f32)_renderArea.extent.height) * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
+		Matrix4<f32> projectionMatrix = Matrix4<f32>::getProjection(camera.fov, _renderArea.extent.width / (f32)_renderArea.extent.height);
+		projectionMatrix.m[1][1] *= -1.0f; // y is flipped in vulkan
+
+		globalUniformBuffer.viewProjectionMatrix = projectionMatrix * Matrix4<f32>::getView(camera.position, camera.yaw, camera.pitch, camera.roll);
 		globalUniformBuffer.viewProjectionMatrix.transpose();
 
 		void* pGlobalUniformBufferData = nullptr;
@@ -1126,7 +1129,7 @@ namespace Visor
 		rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 		rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
 		rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
 		rasterizationStateCreateInfo.depthBiasConstantFactor = 0.0f;
 		rasterizationStateCreateInfo.depthBiasClamp = 0.0f;
