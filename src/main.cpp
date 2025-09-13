@@ -48,7 +48,7 @@ static void addRandomEntities(const Visor::Mesh& mesh, std::vector<Visor::Entity
 	std::uniform_int_distribution<> distrib(-5, 5);
 
 	const Visor::ui32 entityCount = 10;
-	const Visor::f32 scale = 0.1f;
+	const Visor::f32 scale = 0.3f;
 
 	for(Visor::ui32 entityIndex = 0; entityIndex < entityCount; ++entityIndex)
 	{
@@ -101,10 +101,14 @@ static void updatePlayer(Visor::Entity& player)
 
 static void updateOtherEntities(std::vector<Visor::Entity>& entities)
 {
+	static Visor::f32 toy = 0.0f;
 	for(Visor::ui32 i = 1; i < entities.size(); ++i)
 	{
 		entities[i].lookAt(entities[0].position);
+		entities[i].scaleX = std::abs(std::cosf(toy)) * 0.3f + 0.3f;
+		entities[i].scaleZ = std::abs(std::cosf(toy)) * 0.3f + 0.3f;
 	}
+	toy += 0.01f;
 }
 
 static void updateCamera(const Visor::Entity& player, Visor::Camera& camera)
@@ -119,7 +123,7 @@ static void updateCamera(const Visor::Entity& player, Visor::Camera& camera)
 	const Visor::Matrix4<Visor::f32> rotation = Visor::Matrix4<Visor::f32>::getRotation(player.yaw, player.pitch, 0.0f);
 	const Visor::Vector3<Visor::f32> rotatedForward = rotation.getUpperLeft() * playerViewDir;
 
-	Visor::Vector4<Visor::f32> cameraPosition = {0.0f, 3.0f, -5.0f, 1.0f};
+	Visor::Vector4<Visor::f32> cameraPosition = {1.5f, 1.5f, -5.0f, 1.0f};
 	cameraPosition = translation * rotation * cameraPosition;
 	
 	camera.position.x = cameraPosition.x;
@@ -135,10 +139,8 @@ int main()
 	std::vector<Visor::Entity> entities;
 	
 	const Visor::Mesh cubeMesh = loadMesh("../assets/models/cube.obj");
-	const Visor::Mesh teapotMesh = loadMesh("../assets/models/teapot.obj");
-	
-	Visor::Entity player({0.0f, 0.0f, 0.0f}, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, cubeMesh);
-	entities.push_back(player);
+	const Visor::Mesh teapotMesh = loadMesh("../assets/models/man.obj");
+
 	addRandomEntities(teapotMesh, entities);
 
 	Visor::InputSystem::start();
