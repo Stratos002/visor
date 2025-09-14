@@ -507,4 +507,28 @@ namespace Visor
 	{
 		return std::sqrt(getNorm2());
 	}
+
+	// ===== Utils =====
+	template<typename T>
+	Vector3<T> getDirectionFromAngles(T yaw, T pitch, T roll)
+	{
+		Vector3<T> direction = {
+			T(0), 
+			T(0), 
+			T(1)};
+
+		const Matrix4<T> rotation = Matrix4<T>::getRotation(yaw, pitch, roll);
+		direction = rotation.getUpperLeft() * direction;
+		direction.normalize();
+		
+		return direction;
+	}
+
+	template<typename T>
+	void getAnglesFromDirection(const Vector3<T>& direction, T& yaw, T& pitch, T& roll)
+	{
+		yaw = std::atan2(-direction.x, direction.z);
+		pitch = std::asin(direction.y);
+		roll = T(0);
+	}
 }
